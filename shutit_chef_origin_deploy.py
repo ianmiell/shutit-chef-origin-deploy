@@ -118,13 +118,13 @@ EOF''')
       "master_servers": [
         {
           "fqdn": "$(hostname -f)",
-          "ipaddress": "$(hostname -i)"
+          "ipaddress": "$(hostname -I)"
         }
       ],
       "node_servers": [
         {
           "fqdn": "$(hostname -f)",
-          "ipaddress": "$(hostname -i)"
+          "ipaddress": "$(hostname -I)"
         }
       ]
     }
