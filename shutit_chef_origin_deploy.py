@@ -72,6 +72,15 @@ class shutit_chef_origin_deploy(ShutItModule):
 		#                                    - Get input from user and return output
 		# shutit.fail(msg)                   - Fail the program and exit with status 1
 		# 
+		shutit.send('rm -rf /tmp/shutit_chef_origin_deploy')
+		shutit.send('mkdir -p /tmp/shutit_chef_origin_deploy')
+		shutit.send('cd /tmp/shutit_chef_origin_deploy')
+		shutit.send('vagrant init centos/7')
+		shutit.send('vagrant up --provider virtualbox')                                                                                                                       
+		shutit.login(command='vagrant ssh')                                                                                                                                   
+		shutit.login(command='sudo su -',note='Become root')
+
+		### In vagrant box
 		shutit.send('yum -y update')
 		### Create the chef-local mode infrastructure
 		shutit.send('mkdir -p chef-solo-example/{backup,cache}')
@@ -162,6 +171,10 @@ EOF''')
 		### Deploy OSE !!!!
 		shutit.send('''chef-client -z --environment origin -j roles/origin.json -c ~/chef-solo-example/solo.rb''')
 		shutit.send('''echo -e "\n'We donnn!'\n"''')
+
+		### Log out of vagrant machine
+		shutit.logout()
+		shutit.logout()
 		return True
 
 	def get_config(self, shutit):
