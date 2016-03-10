@@ -80,7 +80,14 @@ class shutit_chef_origin_deploy(ShutItModule):
 		shutit.login(command='vagrant ssh')                                                                                                                                   
 		shutit.login(command='sudo su -',note='Become root')
 
+
+		############################################################
+		# This installer is suitable for a standalone installation #
+		# "All in the box" (Master and Node in a server)           #
+		############################################################
 		### In vagrant box
+		shutit.send('sed -i "/' + shutit.cfg[self.module_id]['server_ip'] + '/d" /etc/hosts')
+		shutit.send('echo -e "' + shutit.cfg[self.module_id]['server_ip'] + ' ' + shutit.cfg[self.module_id]['server_fqdn'] + '" >> /etc/hosts')
 		shutit.send('yum -y update')
 		### Create the chef-local mode infrastructure
 		shutit.send('mkdir -p chef-solo-example/{backup,cache}')
@@ -93,9 +100,18 @@ EOF''')
 		### Installing dependencies
 		shutit.install('rubygem-bundler kernel-devel ruby-devel gcc make git')
 		### Installing gems 
+		shutit.send('''if [ ! -f ~/.gemrc ]
+then 
+  echo "gem: --no-document" > ~/.gemrc
+fi''')
 		shutit.send('bundle')
 		### Create a kitchen by knife
 		shutit.send('knife solo init .')
+		shutit.send('''if [ ! -f Cheffile ]
+then
+  librarian-chef init
+fi''')
+		shutit.send('''sed -i '/cookbook-openshift3/d' Cheffile''')
 		### Modify the librarian Cheffile for manage the cookbooks
 		shutit.insert_text("cookbook 'cookbook-openshift3', :git => 'https://github.com/IshentRas/cookbook-openshift3.git'",'Cheffile')
 		shutit.send('librarian-chef install')
@@ -117,14 +133,14 @@ EOF''')
       "openshift_deployment_type": "origin",
       "master_servers": [
         {
-          "fqdn": "$(hostname -f)",
-          "ipaddress": "$(hostname -I)"
+          "fqdn": "''' + shutit.cfg[self.module_id]['server_fqdn'] + '''",
+          "ipaddress": "''' + shutit.cfg[self.module_id]['server_ip'] + '''"
         }
       ],
       "node_servers": [
         {
-          "fqdn": "$(hostname -f)",
-          "ipaddress": "$(hostname -I)"
+          "fqdn": "''' + shutit.cfg[self.module_id]['server_fqdn'] + '''",
+          "ipaddress": "''' + shutit.cfg[self.module_id]['server_ip'] + '''"
         }
       ]
     }
@@ -170,8 +186,30 @@ solo true
 EOF''')
 		### Deploy OSE !!!!
 		shutit.send('''chef-client -z --environment origin -j roles/origin.json -c ~/chef-solo-example/solo.rb''')
-		shutit.send('''echo -e "\n'We donnn!'\n"''')
+		shutit.send('''if ! $(oc get project test --config=/etc/origin/master/admin.kubeconfig &> /dev/null)
+then 
+  # Create a demo project
+  oadm new-project demo --display-name="Origin Demo Project" --admin=demo
+fi''')
+		# Reset password for demo user
+		shutit.send('htpasswd -b /etc/origin/openshift-passwd demo 1234')
+		##### Installation DONE ######
+		#####                   ######
+		shutit.pause_point('''
+Your installation of Origin is completed.
 
+A demo user has been created for you.
+Password is : 1234
+
+You can login via : oc login -u demo
+
+Next steps for you (To be performed as system:admin --> oc login -u system:admin):
+
+1) Deploy registry -> oadm registry --service-account=registry --credentials=/etc/origin/master/openshift-registry.kubeconfig --config=/etc/origin/master/admin.kubeconfig
+2) Deploy router -> oadm router --service-account=router --credentials=/etc/origin/master/openshift-router.kubeconfig
+3) Read the documentation : https://docs.openshift.org/latest/welcome/index.html
+
+You should disconnect and reconnect so as to get the benefit of bash-completion on commands''')
 		### Log out of vagrant machine
 		shutit.logout()
 		shutit.logout()
@@ -185,6 +223,8 @@ EOF''')
 		# shutit.get_config(self.module_id, 'myconfig', default='a value')
 		#                                      and reference in your code with:
 		# shutit.cfg[self.module_id]['myconfig']
+		shutit.get_config(self.module_id,'server_fqdn',default='localhost',hint="Please enter the FQDN of the server, suggestion above: ")
+		shutit.get_config(self.module_id,'server_ip',default='127.0.0.1',hint="Please enter the IP of the server")
 		return True
 
 	def test(self, shutit):
